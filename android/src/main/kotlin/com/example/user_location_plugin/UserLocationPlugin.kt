@@ -40,6 +40,19 @@ class UserLocationPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
             }
         }
 
+    private var locationEventChannel: EventChannel? = null
+    private var locationEventSource: EventChannel.EventSink? = null
+    private var locationStreamHandler: EventChannel.StreamHandler =
+        object : EventChannel.StreamHandler {
+            override fun onListen(arguments: Any?, events: EventChannel.EventSink?) {
+                permissionEventSource = events
+            }
+
+            override fun onCancel(arguments: Any?) {
+                permissionEventSource = null
+            }
+        }
+
     override fun onAttachedToEngine(@NonNull flutterPluginBinding: FlutterPlugin.FlutterPluginBinding) {
         context = flutterPluginBinding.applicationContext
         channel = MethodChannel(flutterPluginBinding.binaryMessenger, userLocationPlugin)
