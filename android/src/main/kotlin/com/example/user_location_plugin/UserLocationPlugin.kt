@@ -9,6 +9,10 @@ import android.util.Log
 import androidx.annotation.NonNull
 import androidx.core.app.ActivityCompat.requestPermissions
 import androidx.core.content.ContextCompat
+import com.google.android.gms.location.FusedLocationProviderClient
+import com.google.android.gms.location.LocationCallback
+import com.google.android.gms.location.LocationRequest
+
 
 import io.flutter.embedding.engine.plugins.FlutterPlugin
 import io.flutter.embedding.engine.plugins.activity.ActivityAware
@@ -19,8 +23,10 @@ import io.flutter.plugin.common.MethodChannel
 import io.flutter.plugin.common.MethodChannel.MethodCallHandler
 import io.flutter.plugin.common.MethodChannel.Result
 import io.flutter.plugin.common.PluginRegistry
-import com.google.android.gms.location.*
+
 import com.google.android.gms.location.LocationRequest.PRIORITY_HIGH_ACCURACY
+import com.google.android.gms.location.LocationResult
+import com.google.android.gms.location.LocationServices
 
 class UserLocationPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
     PluginRegistry.ActivityResultListener {
@@ -28,11 +34,11 @@ class UserLocationPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
     private lateinit var channel: MethodChannel
     private lateinit var context: Context
     private lateinit var activity: Activity
-    private var fusedLocationClient: FusedLocationProviderClient? = null
-    private var locationRequest: LocationRequest? = null
-    private var locationCallback: LocationCallback? = null
+    private lateinit var fusedLocationClient: FusedLocationProviderClient
+    private lateinit var locationRequest: LocationRequest
+    private lateinit var locationCallback: LocationCallback
 
-    private var permissionEventChannel: EventChannel? = null
+    private lateinit var permissionEventChannel: EventChannel
     private var permissionEventSource: EventChannel.EventSink? = null
     private var permissionStreamHandler: EventChannel.StreamHandler =
         object : EventChannel.StreamHandler {
@@ -45,7 +51,7 @@ class UserLocationPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
             }
         }
 
-    private var locationEventChannel: EventChannel? = null
+    private lateinit var locationEventChannel: EventChannel
     private var locationEventSource: EventChannel.EventSink? = null
     private var locationStreamHandler: EventChannel.StreamHandler =
         object : EventChannel.StreamHandler {
@@ -64,10 +70,10 @@ class UserLocationPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
         channel.setMethodCallHandler(this)
         permissionEventChannel =
             EventChannel(flutterPluginBinding.binaryMessenger, permissionEventChanel)
-        permissionEventChannel?.setStreamHandler(permissionStreamHandler)
+        permissionEventChannel.setStreamHandler(permissionStreamHandler)
         locationEventChannel =
             EventChannel(flutterPluginBinding.binaryMessenger, locationEventChanel)
-        locationEventChannel?.setStreamHandler(locationStreamHandler)
+        locationEventChannel.setStreamHandler(locationStreamHandler)
     }
 
     override fun onMethodCall(@NonNull call: MethodCall, @NonNull result: Result) {
@@ -87,8 +93,8 @@ class UserLocationPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
         val permission = permissionGranted()
         if(permission){
             locationRequest = LocationRequest.create()
-            locationRequest?.interval = 3000
-            locationRequest?.priority = PRIORITY_HIGH_ACCURACY
+            locationRequest.interval = requestInterval
+            locationRequest.priority = PRIORITY_HIGH_ACCURACY
             locationCallback = object : LocationCallback() {
                 override fun onLocationResult(locationResult: LocationResult?) {
                     locationEventSource?.success(longitudDisplay + locationResult?.lastLocation?.longitude.toString() + ", " + latitudDisplay + locationResult?.lastLocation?.latitude.toString())
@@ -101,7 +107,7 @@ class UserLocationPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
     }
 
     private fun startListeningLocation(result: Result){
-        fusedLocationClient?.requestLocationUpdates(
+        fusedLocationClient.requestLocationUpdates(
             locationRequest,
             locationCallback,
             null
@@ -111,7 +117,7 @@ class UserLocationPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
 
     private fun stopListeningLocation(result: Result) {
         context.run {
-            fusedLocationClient?.removeLocationUpdates(locationCallback)
+            fusedLocationClient.removeLocationUpdates(locationCallback)
         }
         locationEventSource?.success(stopListeningResponse)
         result.success(true)
@@ -202,5 +208,6 @@ class UserLocationPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
         const val latitudDisplay: String = "Latitud: "
         const val longitudDisplay: String = "Longitud: "
         const val locationFail: String = "Not permission granted"
+        const val requestInterval: Long = 3000
     }
 }
