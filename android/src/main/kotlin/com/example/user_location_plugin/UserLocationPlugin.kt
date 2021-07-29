@@ -9,6 +9,10 @@ import android.util.Log
 import androidx.annotation.NonNull
 import androidx.core.app.ActivityCompat.requestPermissions
 import androidx.core.content.ContextCompat
+import com.google.android.gms.location.FusedLocationProviderClient
+import com.google.android.gms.location.LocationCallback
+import com.google.android.gms.location.LocationRequest
+
 
 import io.flutter.embedding.engine.plugins.FlutterPlugin
 import io.flutter.embedding.engine.plugins.activity.ActivityAware
@@ -20,14 +24,21 @@ import io.flutter.plugin.common.MethodChannel.MethodCallHandler
 import io.flutter.plugin.common.MethodChannel.Result
 import io.flutter.plugin.common.PluginRegistry
 
+import com.google.android.gms.location.LocationRequest.PRIORITY_HIGH_ACCURACY
+import com.google.android.gms.location.LocationResult
+import com.google.android.gms.location.LocationServices
+
 class UserLocationPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
     PluginRegistry.ActivityResultListener {
 
     private lateinit var channel: MethodChannel
     private lateinit var context: Context
     private lateinit var activity: Activity
+    private lateinit var fusedLocationClient: FusedLocationProviderClient
+    private lateinit var locationRequest: LocationRequest
+    private lateinit var locationCallback: LocationCallback
 
-    private var permissionEventChannel: EventChannel? = null
+    private lateinit var permissionEventChannel: EventChannel
     private var permissionEventSource: EventChannel.EventSink? = null
     private var permissionStreamHandler: EventChannel.StreamHandler =
         object : EventChannel.StreamHandler {
@@ -40,16 +51,16 @@ class UserLocationPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
             }
         }
 
-    private var locationEventChannel: EventChannel? = null
+    private lateinit var locationEventChannel: EventChannel
     private var locationEventSource: EventChannel.EventSink? = null
     private var locationStreamHandler: EventChannel.StreamHandler =
         object : EventChannel.StreamHandler {
             override fun onListen(arguments: Any?, events: EventChannel.EventSink?) {
-                permissionEventSource = events
+                locationEventSource = events
             }
 
             override fun onCancel(arguments: Any?) {
-                permissionEventSource = null
+                locationEventSource = null
             }
         }
 
@@ -58,8 +69,11 @@ class UserLocationPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
         channel = MethodChannel(flutterPluginBinding.binaryMessenger, userLocationPlugin)
         channel.setMethodCallHandler(this)
         permissionEventChannel =
-            EventChannel(flutterPluginBinding.binaryMessenger, permissionEventChannel)
-        permissionEventChannel?.setStreamHandler(permissionStreamHandler)
+            EventChannel(flutterPluginBinding.binaryMessenger, permissionEventChanel)
+        permissionEventChannel.setStreamHandler(permissionStreamHandler)
+        locationEventChannel =
+            EventChannel(flutterPluginBinding.binaryMessenger, locationEventChanel)
+        locationEventChannel.setStreamHandler(locationStreamHandler)
     }
 
     override fun onMethodCall(@NonNull call: MethodCall, @NonNull result: Result) {
@@ -67,13 +81,52 @@ class UserLocationPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
             getPlatformVersion -> getPlatformVersion(result)
             requestPermission -> requestPermission(result)
             checkPermission -> checkPermission(result)
+            initializePlugin -> initializePlugin(result)
+            startListeningLocation -> startListeningLocation(result)
+            stopListeningLocation -> stopListeningLocation(result)
             else -> result.notImplemented()
         }
+    }
+
+    private fun initializePlugin(result: Result) {
+        fusedLocationClient = LocationServices.getFusedLocationProviderClient(activity)
+        val permission = permissionGranted()
+        if(permission){
+            locationRequest = LocationRequest.create()
+            locationRequest.interval = requestInterval
+            locationRequest.priority = PRIORITY_HIGH_ACCURACY
+            locationCallback = object : LocationCallback() {
+                override fun onLocationResult(locationResult: LocationResult?) {
+                    locationEventSource?.success(longitudDisplay + locationResult?.lastLocation?.longitude.toString() + ", " + latitudDisplay + locationResult?.lastLocation?.latitude.toString())
+                }
+            }
+        }else{
+            locationEventSource?.success(locationFail)
+        }
+        result.success(permission)
+    }
+
+    private fun startListeningLocation(result: Result){
+        fusedLocationClient.requestLocationUpdates(
+            locationRequest,
+            locationCallback,
+            null
+        )
+        result.success(true)
+    }
+
+    private fun stopListeningLocation(result: Result) {
+        context.run {
+            fusedLocationClient.removeLocationUpdates(locationCallback)
+        }
+        locationEventSource?.success(stopListeningResponse)
+        result.success(true)
     }
 
     override fun onAttachedToActivity(binding: ActivityPluginBinding) {
         activity = binding.activity
         binding.addActivityResultListener(this)
+        fusedLocationClient = LocationServices.getFusedLocationProviderClient(activity)
     }
 
     override fun onDetachedFromActivityForConfigChanges() {
@@ -93,8 +146,8 @@ class UserLocationPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
     }
 
     private fun requestPermission(result: Result) {
-        context?.run {
-            activity?.apply {
+        context.run {
+            activity.apply {
                 requestPermissions(
                     this,
                     arrayOf(
@@ -108,9 +161,15 @@ class UserLocationPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
         result.success(null)
     }
 
-    private fun checkPermission(result: Result): Boolean {
-        var permitted = false
-        context?.run {
+    private fun checkPermission(result: Result) {
+        val permitted = permissionGranted()
+        permissionEventSource?.success(if (permitted) permissionGranted else permissionDenied)
+        result.success(permitted)
+    }
+
+    private fun permissionGranted(): Boolean{
+        var permitted: Boolean
+        context.run {
             permitted = ContextCompat.checkSelfPermission(
                 this,
                 Manifest.permission.ACCESS_FINE_LOCATION
@@ -119,13 +178,7 @@ class UserLocationPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
                 this,
                 Manifest.permission.ACCESS_COARSE_LOCATION
             ) == PackageManager.PERMISSION_GRANTED
-            permissionEventSource?.success(
-                if (permitted) permissionGranted else permissionEventSource?.success(
-                    permissionDenied
-                )
-            )
         }
-        result.success(permitted)
         return permitted
     }
 
@@ -143,9 +196,18 @@ class UserLocationPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
         const val permissionDenied: String = "Permission denied"
         const val getPlatformVersion: String = "getPlatformVersion"
         const val requestPermission: String = "requestPermission"
+        const val startListeningLocation: String = "startListeningLocation"
+        const val stopListeningLocation: String = "stopListeningLocation"
+        const val stopListeningResponse: String = "You stop the plugin"
+        const val initializePlugin: String = "initializePlugin"
         const val checkPermission: String = "checkPermission"
         const val requestPermissionCode: Int = 500
         const val userLocationPlugin: String = "user_location_plugin"
-        const val permissionEventChannerl: String = "permission_event_channel"
+        const val permissionEventChanel: String = "permission_event_channel"
+        const val locationEventChanel: String = "location_event_channel"
+        const val latitudDisplay: String = "Latitud: "
+        const val longitudDisplay: String = "Longitud: "
+        const val locationFail: String = "Not permission granted"
+        const val requestInterval: Long = 3000
     }
 }

@@ -77,7 +77,40 @@ class _MyAppState extends State<MyApp> {
                           MainPageStrings.defaultCheckedPermission,
                         );
                 },
-              )
+              ),
+              ButtonWidget(
+                onPressed: () {
+                  UserLocationPlugin.initializePlugin;
+                },
+                buttonText: MainPageStrings.initializePluginButtonText,
+              ),
+              ButtonWidget(
+                onPressed: () {
+                  UserLocationPlugin.startListeningLocation;
+                },
+                buttonText: MainPageStrings.bottonLocationText,
+              ),
+              StreamBuilder(
+                stream: UserLocationPlugin.locationEventChannelStream,
+                builder: (
+                    BuildContext context,
+                    AsyncSnapshot<dynamic> snapshot,
+                    ) {
+                  return snapshot.hasData
+                      ? Text(
+                    snapshot.data,
+                  )
+                      : Text(
+                    MainPageStrings.locationDefault,
+                  );
+                },
+              ),
+              ButtonWidget(
+                onPressed: () {
+                  UserLocationPlugin.stopListeningLocation;
+                },
+                buttonText: MainPageStrings.stopPluginButtonText,
+              ),
             ],
           ),
         ),

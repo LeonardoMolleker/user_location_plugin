@@ -4,6 +4,9 @@ import 'dart:async';
 class UserLocationPlugin {
   static const _permissionEventChannel = EventChannel("permission_event_channel");
   static Stream<dynamic> permissionEventChannelStream = _permissionEventChannel.receiveBroadcastStream();
+
+  static const _locationEventChannel = EventChannel("location_event_channel");
+  static Stream<dynamic> locationEventChannelStream = _locationEventChannel.receiveBroadcastStream();
   
   static const MethodChannel _channel =
   const MethodChannel('user_location_plugin');
@@ -13,8 +16,13 @@ class UserLocationPlugin {
     return version;
   }
 
-  static Future<bool> get initializePlugin async{
-    final bool initialize = await _channel.invokeMethod('initializePlugin');
+  static Future<void> get initializePlugin async {
+    await _channel.invokeMethod("initializePlugin");
+    return;
+  }
+
+  static Future<bool> get startListeningLocation async{
+    final bool initialize = await _channel.invokeMethod('startListeningLocation');
     return initialize;
   }
 
@@ -28,13 +36,8 @@ class UserLocationPlugin {
     return;
   }
 
-  static Future<Map<dynamic,dynamic>> get lastCoordinates async{
-    final Map<dynamic,dynamic> coordinates = await _channel.invokeMethod('lastCoordinates');
-    return coordinates;
-  }
-
-  static Future<bool> get stopLocation async{
-    final bool stopLocation = await _channel.invokeMethod('stopLocation');
+  static Future<bool> get stopListeningLocation async{
+    final bool stopLocation = await _channel.invokeMethod('stopListeningLocation');
     return stopLocation;
   }
 }
